@@ -1,9 +1,13 @@
 {
+  "name": "discord-monitor",
+  "version": "1.0.0",
+  "description": "Monitor de Orbs y Actualizaciones",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
   "dependencies": {
     "discord.js": "^14.14.1",
     "axios": "^1.6.0"
-  },
-  "scripts": {
-    "start": "node index.js"
   }
 }
