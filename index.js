@@ -22,9 +22,9 @@ async function sendEmbed(title, desc, color) {
             .setDescription(desc)
             .setColor(color)
             .setTimestamp()
-            .setFooter({ text: 'Monitoreo 24/7' });
+            .setFooter({ text: 'Vigilancia Discord 24/7' });
         await channel.send({ embeds: [embed] });
-    } catch (e) { console.log("Error en el envío"); }
+    } catch (e) { console.log("Error al enviar mensaje"); }
 }
 
 async function monitor() {
@@ -42,27 +42,27 @@ async function monitor() {
 
         const verRes = await axios.get(VERSION_API, { headers });
         if (lastVersion && lastVersion !== verRes.data.name) {
-            await sendEmbed("🆙 Actualización Discord", `Nueva versión: \`${verRes.data.name}\``, 0x2ECC71);
+            await sendEmbed("🆙 Actualización de Discord", `Nueva build estable detectada: \`${verRes.data.name}\``, 0x2ECC71);
         }
         lastVersion = verRes.data.name;
-    } catch (err) { console.log("Ciclo de espera..."); }
+    } catch (err) { console.log("Reintentando ciclo..."); }
 }
 
 client.once('ready', () => {
-    console.log(`✅ Bot online: ${client.user.tag}`);
-    sendEmbed("✅ Sistema Revivido", "Vigilando Orbs y Actualizaciones correctamente.", 0x95A5A6);
-    setInterval(monitor, 3600000);
+    console.log(`✅ Bot conectado: ${client.user.tag}`);
+    sendEmbed("✅ Sistema en Línea", "Vigilando Orbs y Actualizaciones correctamente.", 0x95A5A6);
+    setInterval(monitor, 3600000); // Revisa cada hora
     monitor();
 });
 
-if (TOKEN) {
-    client.login(TOKEN).catch(() => console.log("Token Inválido"));
+if (TOKEN && TOKEN !== "") {
+    client.login(TOKEN).catch(() => console.log("Error: Token inválido"));
 } else {
-    console.log("Falta DISCORD_TOKEN en Render");
+    console.log("Error: Falta el DISCORD_TOKEN");
 }
 
 http.createServer((req, res) => {
-    res.write('Bot Online');
+    res.write('Bot Vivo');
     res.end();
 }).listen(process.env.PORT |
           | 3000);
