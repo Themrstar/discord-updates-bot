@@ -47,5 +47,4 @@ client.once('ready', () => {
 });
 
 client.login(TOKEN);
-http.createServer((req, res) => { res.write('OK'); res.end(); }).listen(process.env.PORT || 
-                                                                        3000);
+http.createServer((req, res) => { res.write('OK'); res.end(); }).listen(process.env.PORT || 3000);
