@@ -19,5 +19,4 @@ if (TOKEN) {
     console.log("❌ No se encontró el TOKEN en Render");
 }
 
-http.createServer((req, res) => { res.end('Bot vivo'); }).listen(process.env.PORT || 30
-                                                                 00);
+http.createServer((req, res) => { res.end('Bot vivo'); }).listen(process.env.PORT || 3000);
