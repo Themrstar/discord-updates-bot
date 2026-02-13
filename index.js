@@ -1,84 +1,92 @@
 const axios = require('axios');
 const http = require('http');
 
-// CONFIGURACIÓN: Render sacará esto de tus Variables de Entorno
+// CONFIGURACIÓN (Extraída de las variables de entorno de Render)
 const WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
-const DISCORD_QUESTS_API = "https://discord.com/api/v9/discovery/promotions";
+const ORBS_API = "https://discord.com/api/v9/discovery/promotions";
+const VERSION_API = "https://discord.com/api/v9/updates?platform=branch&branch=stable";
 
 let lastQuests = [];
+let lastVersion = "";
 
-// Función principal de monitoreo
-async function checkDiscordUpdates() {
+// Función para enviar notificaciones al Webhook
+async function sendToDiscord(title, description, color = 5793266) {
+    if (!WEBHOOK_URL) return console.error("❌ Error: No configuraste la variable DISCORD_WEBHOOK_URL en Render.");
+    
     try {
-        console.log("Revisando nuevas misiones de Orbs...");
-        
-        const response = await axios.get(DISCORD_QUESTS_API, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-                'Accept': '*/*',
-                'Accept-Language': 'en-US,en;q=0.9'
-            }
+        await axios.post(WEBHOOK_URL, {
+            username: "Discord Update Bot",
+            avatar_url: "https://i.imgur.com/vHIn8mB.png",
+            embeds: [{
+                title: title,
+                description: description,
+                color: color,
+                footer: { text: "Sistema 24/7 activo" },
+                timestamp: new Date()
+            }]
         });
-
-        const currentQuests = response.data;
-
-        // Si es la primera ejecución, guardamos lo que hay para tener una base
-        if (lastQuests.length === 0) {
-            lastQuests = currentQuests.map(q => q.id);
-            console.log(`Sistema iniciado. Detectadas ${lastQuests.length} misiones activas.`);
-            return;
-        }
-
-        // Comparar misiones nuevas
-        for (const quest of currentQuests) {
-            if (!lastQuests.includes(quest.id)) {
-                await sendWebhookNotification(quest);
-                lastQuests.push(quest.id);
-            }
-        }
-    } catch (error) {
-        if (error.response && error.response.status === 429) {
-            console.error("⚠️ Error 429: Discord nos ha limitado temporalmente. Reintentando luego...");
-        } else {
-            console.error("❌ Error al rastrear misiones:", error.message);
-        }
+    } catch (err) {
+        console.error("❌ Error al enviar al Webhook:", err.message);
     }
 }
 
-// Función para enviar el mensaje a tu Discord
-async function sendWebhookNotification(quest) {
-    const payload = {
-        username: "Discord Orb Tracker",
-        avatar_url: "https://i.imgur.com/vHIn8mB.png",
-        embeds: [{
-            title: "🚀 ¡Nueva Misión de Orbs / Quest Detectada!",
-            description: `**Nombre:** ${quest.outbound_title || "Sin título"}\n**Descripción:** ${quest.outbound_redemption_modal_body || "Revisa tu inventario de regalos."}`,
-            color: 5793266,
-            fields: [
-                { name: "ID de Misión", value: `\`${quest.id}\``, inline: true }
-            ],
-            footer: { text: "Monitoreo 24/7 activo" },
-            timestamp: new Date()
-        }]
+// Función de monitoreo
+async function monitor() {
+    console.log("🔍 Escaneando cambios en Discord...");
+    const headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        'Accept': '*/*'
     };
 
     try {
-        await axios.post(WEBHOOK_URL, payload);
-        console.log(`✅ Notificación enviada: ${quest.outbound_title}`);
-    } catch (err) {
-        console.error("Error enviando al Webhook:", err.message);
+        // 1. Rastrear Orbs (Misiones)
+        const orbRes = await axios.get(ORBS_API, { headers });
+        const currentQuests = orbRes.data;
+
+        if (lastQuests.length > 0) {
+            for (const quest of currentQuests) {
+                if (!lastQuests.includes(quest.id)) {
+                    await sendToDiscord("🚀 ¡Nueva Misión de Orbs!", `**Misión:** ${quest.outbound_title}\n**Premio:** ${quest.outbound_redemption_modal_body}`, 15105570);
+                    lastQuests.push(quest.id);
+                }
+            }
+        } else {
+            lastQuests = currentQuests.map(q => q.id);
+            console.log(`✅ Base de Orbs cargada: ${lastQuests.length} activas.`);
+        }
+
+        // 2. Rastrear Actualizaciones de Versión
+        const verRes = await axios.get(VERSION_API, { headers });
+        const currentVersion = verRes.data.name;
+
+        if (lastVersion && lastVersion !== currentVersion) {
+            await sendToDiscord("🆙 ¡Actualización de Discord!", `Se ha detectado una nueva versión estable:\n**Build:** \`${currentVersion}\``, 3447003);
+            lastVersion = currentVersion;
+        } else {
+            lastVersion = currentVersion;
+        }
+
+    } catch (error) {
+        if (error.response && error.response.status === 429) {
+            console.log("⚠️ Rate Limit (429). Discord bloqueó la IP temporalmente. Reintentando en el próximo ciclo...");
+        } else {
+            console.error("❌ Error de conexión:", error.message);
+        }
     }
 }
 
-// Revisar cada 30 minutos (1800000 ms)
-setInterval(checkDiscordUpdates, 1800000);
+// Mensaje de prueba al arrancar para confirmar que funciona
+setTimeout(() => {
+    sendToDiscord("✅ Bot Conectado", "El sistema está funcionando 24/7 desde Render y vigilando actualizaciones.");
+}, 5000);
 
-// Ejecución inmediata al arrancar
-checkDiscordUpdates();
+// Ejecutar cada 30 minutos
+setInterval(monitor, 1800000);
+monitor();
 
-// SERVIDOR PARA RENDER: Mantiene el bot "Live"
+// Mantener el servicio "Live" en Render
 http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Bot de Actualizaciones Discord esta funcionando 24/7\n');
-}).listen(process.env.PORT
-          || 3000);
+    res.write('Bot de Discord Online 24/7');
+    res.end();
+}).listen(process.env.POR
+          T || 3000);
