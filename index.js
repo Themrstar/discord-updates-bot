@@ -1,46 +1,50 @@
+const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 const axios = require('axios');
 const http = require('http');
 
-const WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
+// VARIABLES (Configura estas en Render)
+const TOKEN = process.env.DISCORD_TOKEN;
+const CHANNEL_ID = process.env.CHANNEL_ID;
 const ORBS_API = "https://discord.com/api/v9/discovery/promotions";
 
+const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 let lastQuests = [];
 
-async function sendToDiscord(msg, isEmbed = false) {
-    if (!WEBHOOK_URL) return;
+async function monitorOrbs() {
     try {
-        await axios.post(WEBHOOK_URL, isEmbed ? { embeds: [msg] } : { content: msg });
-    } catch (e) { console.log("Error enviando Webhook"); }
-}
-
-async function monitor() {
-    try {
-        console.log("Revisando Orbs...");
         const res = await axios.get(ORBS_API, {
             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0' }
         });
         const quests = res.data;
+
         if (lastQuests.length > 0) {
+            const channel = await client.channels.fetch(CHANNEL_ID);
             for (const q of quests) {
                 if (!lastQuests.includes(q.id)) {
-                    await sendToDiscord({ title: "🚀 Nueva Misión detectada", description: q.outbound_title, color: 5814783 }, true);
+                    const embed = new EmbedBuilder()
+                        .setTitle("🚀 ¡Nueva Misión de Orbs!")
+                        .setDescription(q.outbound_title)
+                        .setColor(0x5865F2)
+                        .setTimestamp();
+                    channel.send({ embeds: [embed] });
                     lastQuests.push(q.id);
                 }
             }
         } else {
             lastQuests = quests.map(q => q.id);
-            console.log("Base de datos cargada correctamente.");
+            console.log("Base de datos cargada.");
         }
-    } catch (err) {
-        console.log("Esperando a que Discord libere la IP...");
-    }
+    } catch (err) { console.log("Reintentando ciclo..."); }
 }
 
-// Mensaje de prueba
-setTimeout(() => sendToDiscord("✅ **Bot Online:** Vigilando actualizaciones y Orbs 24/7."), 5000);
+client.once('ready', () => {
+    console.log(`Bot logueado como ${client.user.tag}`);
+    setInterval(monitorOrbs, 3600000); 
+    monitorOrbs();
+});
 
-setInterval(monitor, 3600000); // Revisa cada 60 min
-monitor();
+client.login(TOKEN);
 
+// Servidor para Render
 http.createServer((req, res) => { res.write('Bot Vivo'); res.end(); }).listen(process.env.PORT || 
                                                                               3000);
