@@ -1,59 +1,84 @@
 const axios = require('axios');
+const http = require('http');
 
-// Configuración de URLs
+// CONFIGURACIÓN: Render sacará esto de tus Variables de Entorno
 const WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 const DISCORD_QUESTS_API = "https://discord.com/api/v9/discovery/promotions";
 
 let lastQuests = [];
 
+// Función principal de monitoreo
 async function checkDiscordUpdates() {
     try {
-        // Consultamos las misiones (Orbs) actuales
-        const response = await axios.get(DISCORD_QUESTS_API);
+        console.log("Revisando nuevas misiones de Orbs...");
+        
+        const response = await axios.get(DISCORD_QUESTS_API, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                'Accept': '*/*',
+                'Accept-Language': 'en-US,en;q=0.9'
+            }
+        });
+
         const currentQuests = response.data;
 
-        // Si es la primera vez que corre, guardamos las misiones actuales sin notificar
+        // Si es la primera ejecución, guardamos lo que hay para tener una base
         if (lastQuests.length === 0) {
             lastQuests = currentQuests.map(q => q.id);
-            console.log("Sistema iniciado. Monitoreando Orbs...");
+            console.log(`Sistema iniciado. Detectadas ${lastQuests.length} misiones activas.`);
             return;
         }
 
-        // Buscamos si hay misiones nuevas comparando IDs
+        // Comparar misiones nuevas
         for (const quest of currentQuests) {
             if (!lastQuests.includes(quest.id)) {
-                // ¡Nueva misión detectada!
                 await sendWebhookNotification(quest);
                 lastQuests.push(quest.id);
             }
         }
     } catch (error) {
-        console.error("Error al rastrear misiones:", error.message);
+        if (error.response && error.response.status === 429) {
+            console.error("⚠️ Error 429: Discord nos ha limitado temporalmente. Reintentando luego...");
+        } else {
+            console.error("❌ Error al rastrear misiones:", error.message);
+        }
     }
 }
 
+// Función para enviar el mensaje a tu Discord
 async function sendWebhookNotification(quest) {
     const payload = {
+        username: "Discord Orb Tracker",
+        avatar_url: "https://i.imgur.com/vHIn8mB.png",
         embeds: [{
-            title: "🚀 ¡Nueva Misión de Orbs detectada!",
-            description: `**Misión:** ${quest.outbound_title}\n**Recompensa:** ${quest.outbound_redemption_modal_body}`,
-            color: 5814783, // Color azul Discord
-            footer: { text: "Actualizaciones de Discord 24/7" },
+            title: "🚀 ¡Nueva Misión de Orbs / Quest Detectada!",
+            description: `**Nombre:** ${quest.outbound_title || "Sin título"}\n**Descripción:** ${quest.outbound_redemption_modal_body || "Revisa tu inventario de regalos."}`,
+            color: 5793266,
+            fields: [
+                { name: "ID de Misión", value: `\`${quest.id}\``, inline: true }
+            ],
+            footer: { text: "Monitoreo 24/7 activo" },
             timestamp: new Date()
         }]
     };
 
-    await axios.post(WEBHOOK_URL, payload);
-    console.log(`Notificación enviada: ${quest.outbound_title}`);
+    try {
+        await axios.post(WEBHOOK_URL, payload);
+        console.log(`✅ Notificación enviada: ${quest.outbound_title}`);
+    } catch (err) {
+        console.error("Error enviando al Webhook:", err.message);
+    }
 }
 
-// Ejecutar cada 30 minutos (1800000 ms) para no saturar la API
+// Revisar cada 30 minutos (1800000 ms)
 setInterval(checkDiscordUpdates, 1800000);
 
-// Ejecución inicial
+// Ejecución inmediata al arrancar
 checkDiscordUpdates();
 
-// Servidor básico para que Render no dé error de puerto
-const http = require('http');
-http.createServer((req, res) => res.end("Bot Online")).listen(process.env.PORT 
-                      || 3000);
+// SERVIDOR PARA RENDER: Mantiene el bot "Live"
+http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Bot de Actualizaciones Discord esta funcionando 24/7\n');
+}).listen(process.env.PORT
+          || 3000);
